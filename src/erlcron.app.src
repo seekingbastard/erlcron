@@ -1,0 +1,12 @@
+{application, erlcron,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { erlcron_app, []}},
+  {env, []}
+ ]}.

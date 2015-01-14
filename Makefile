@@ -1,0 +1,27 @@
+ERL ?= erl
+APP := cards_mng
+
+.PHONY: deps
+
+all: deps
+	@./rebar compile
+
+nodeps:
+	@./rebar skip_deps=true compile
+
+deps:
+	@./rebar get-deps
+
+clean:
+	@./rebar clean
+
+distclean: clean
+	@./rebar delete-deps
+
+docs:
+	@erl -noshell -run edoc_run application '$(APP)' '"."' '[]'
+
+test:
+	@rm -rf .eunit
+	@mkdir -p .eunit
+	@./rebar skip_deps=true eunit
