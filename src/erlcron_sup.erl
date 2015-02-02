@@ -26,7 +26,10 @@ start_link() ->
 
 init([]) ->
 
-    Timer = ?CHILD(erlcron_timer,worker,[erlcron:env(cron_config)]),
+    Timer = ?CHILD(erlcron_timer,worker,[
+        [erlcron:env(cron_config),
+        erlcron:env(jobs_dir)]
+    ]),
  
     {ok, { {one_for_one, 5, 10}, [Timer]} }.
 

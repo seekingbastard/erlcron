@@ -11,9 +11,7 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3,  handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--record(state, { config_path = "", tasks = [], jobs_dir = [] } ).
-
--include("include/erlcron.hrl").
+-record(state, { config_path = "", tasks = [], jobs_dir = "" } ).
 
 %%%===================================================================
 %%% API
@@ -31,7 +29,7 @@ load_cron_config() ->
 %%-------------------------------------------------------------------- 
 
 start_link(Args) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Args], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -49,8 +47,8 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 
-init([ConfigPath]) ->
-    {ok, #state{ config_path = ConfigPath } }.
+init([ConfigPath,JobsDir]) ->
+    {ok, #state{ config_path = ConfigPath, jobs_dir = JobsDir } }.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -68,8 +66,7 @@ init([ConfigPath]) ->
 %%--------------------------------------------------------------------
 
 handle_call(load_config,_From,#state{ config_path = Path } = State) -> 
-    load_tasks(file:consult(Path)),
-    {reply,ok,State};
+    {reply,ok,State#state{ tasks = load_tasks(file:consult(Path)) }};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -98,6 +95,12 @@ handle_cast(_Msg, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
+handle_info({time_out,Num}, #state{ tasks = Tasks } = State) -> 
+    Task = lists:filter(fun({N,_,_,_,_}) -> N==Num end, Tasks),
+    {noreply, State#state{ tasks = lists:delete(Tasks,Task) } };
+handle_info(check_task, #state{ tasks = Ts } = State) ->
+    io:format("~p~n",[ Ts ]),
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -132,12 +135,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+%io:fwrite("|~-6s|~-1s~-20s|~-1s~-20s|~-40s|~-40s|",["1"," ","2015-06-09 10:00:00"," ","2015-06-09 10:00:00","compesation","collect_and_pay"]).
+
 load_tasks({ok,[]}) -> [];
 load_tasks({error,_}) -> [];
 load_tasks({ok,Data}) ->
-    lists:foldl( fun(Timer,Acc) ->
-        TimeToStart = create_timers(Timer,calendar:local_time()),
-        Acc
+    lists:foldl( fun(Job,Acc) ->
+        Num = length(Acc) + 1,
+        Period = create_timers(Job,calendar:local_time()),
+        {ok,Ref} = timer:send_after(Period,self(),{time_out,Num}),
+        lists:append(Acc,[{Num,Ref,Job,Period,calendar:local_time()}])
     end,[],Data).
 
 create_timers({{0,0},{_,_,_}=Time,_,_},{{CY,CM,CD}=Date,_} = CDate) ->
@@ -155,7 +162,6 @@ diff(D1,D2,D3) when D1 =< D2 ->
 diff(D1,D2,_) ->
     count_milliseconds(calendar:time_difference(D2,D1)).
 
-count_milliseconds({Days,{Hr,Min,Sec}} = F) ->
-    io:format("~p~n",[F]),
+count_milliseconds({Days,{Hr,Min,Sec}}) ->
     round((Days*24 + Hr + Min/60 + Sec/3600) * 3600000).
  
